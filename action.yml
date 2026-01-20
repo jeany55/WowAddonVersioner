@@ -30,7 +30,7 @@ inputs:
   create-issue-if-updates-found:
     description: "Whether to create an issue if any updates are found. (true/false)"
     required: false
-    default: true
+    default: false
   github-token:
     description: "GitHub token to use when creating the pull request and/or issue."
     required: false
