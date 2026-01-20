@@ -1,4 +1,4 @@
-# <img src="./img/wowicon.svg" alt="World of Warcraft Icon" width="30"/>  WoW Addon TOC Versioner
+# <img src="./img/wowicon.svg" alt="World of Warcraft Icon" width="24"/>  WoW Addon TOC Versioner
 
 **Automatically keep your World of Warcraft addons up to date!**
 
