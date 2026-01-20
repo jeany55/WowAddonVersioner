@@ -27583,7 +27583,7 @@ var GameType;
     GameType["Mists"] = "Mists";
 })(GameType || (GameType = {}));
 
-var version = "0.0.3";
+var version = "0.0.7";
 var author = "Jeany55";
 
 /**
