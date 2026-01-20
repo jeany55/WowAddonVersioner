@@ -1,4 +1,4 @@
-# <img src="./img/wowicon.svg" alt="World of Warcraft Icon" width="24"/>  WoW Addon TOC Versioner
+# <img src="./img/wowicon.svg" alt="World of Warcraft Icon" width="30"/>  WoW Addon TOC Versioner
 
 **Automatically keep your World of Warcraft addons up to date!**
 
@@ -50,7 +50,7 @@ jobs:
 
 That's it! This example action will run daily at 7 PM and also allow for manual triggering. The action will automatically check your TOC files and create a PR if updates are available.
 
-## 📖 Usage Examples
+## Usage Examples
 
 ### Basic Usage (Auto-PR)
 
