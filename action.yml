@@ -32,6 +32,10 @@ inputs:
     description: 'Whether to create an issue if any updates are found. (true/false)'
     required: false
     default: true
+  github-token:
+    description: 'GitHub token to use when creating the pull request and/or issue.'
+    required: false
+    default: '${{ secrets.GITHUB_TOKEN }}'
 
 # Define your outputs here.
 # outputs:
@@ -53,13 +57,11 @@ runs:
       id: versioner
       run: node ${{ github.action_path }}/dist/index.js"
       shell: bash
-      outputs:
-        tocs-updated: ${{ steps.run-wow-addon-toc-versioner.outputs.tocs-updated }}
-        tocs-markdown-table: ${{ steps.run-wow-addon-toc-versioner.outputs.tocs-markdown-table }}
 
     - name: 'Create Pull Request'
       uses: 'peter-evans/create-pull-request@v4'
       with:
+        token: ${{ inputs.github-token }}
         commit-message: 'Update toc interface versions to latest'
         title: 'Update TOC interface versions'
         body: ${{ steps.versioner.outputs.tocs-pr }}
@@ -70,7 +72,7 @@ runs:
     - name: 'Create Issue'
       uses: JasonEtco/create-an-issue@v2
       env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        GITHUB_TOKEN: ${{ inputs.github-token }}
       with:
         filename: issue-template.md
       if: ${{ inputs.create-issue-if-updates-found == 'true' && steps.versioner.outputs.tocs-updated != '0' }}
