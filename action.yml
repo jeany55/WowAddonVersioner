@@ -55,7 +55,7 @@ runs:
 
     - name: Run WoW Addon TOC Versioner
       id: versioner
-      run: node ${{ github.action_path }}/dist/index.js"
+      run: node ${{ github.action_path }}/dist/index.js
       shell: bash
 
     - name: 'Create Pull Request'
