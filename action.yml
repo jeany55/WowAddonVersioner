@@ -1,27 +1,76 @@
-name: "WoW Addon TOC Versioner"
-description: "Checks to see if the versions in your addon's .toc files are old and updates them and creates a PR if necessary."
+name: WoW Addon TOC Versioner
+description:
+  Checks to see if the versions in your addon's .toc files are old and updates them and creates a PR if necessary.
+author: Jeany55
+
+branding:
+  icon: heart
+  color: red
 
 inputs:
-  wikiURL:
-    description: "The URL of the WoW Addon Wiki to use for version checking."
+  wiki-url:
+    description: 'The URL of the WoW Addon Wiki to use for version checking.'
     required: false
-    default: "https://warcraft.wiki.gg/wiki/API_GetBuildInfo"
+    default: 'https://warcraft.wiki.gg/wiki/API_GetBuildInfo'
+  toc-directory:
+    description: "If the toc files are not in the repository root, specify the directory here. (eg. '/src/addonTocs')"
+    required: false
+    default: ''
+  create-pr:
+    description: 'Whether to create a pull request with the version updates if any are found. (true/false)'
+    required: false
+    default: true
+  fail-job-when-updates-found:
+    description: 'Whether to fail the GitHub Action job if any updates are found. (true/false)'
+    required: false
+    default: false
+  pr-branch-name:
+    description: "The name of the branch to create for the pull request, if the 'create-pr' option is true."
+    required: false
+    default: 'auto/update-interface-versions'
+  create-issue-if-updates-found:
+    description: 'Whether to create an issue if any updates are found. (true/false)'
+    required: false
+    default: true
+
+# Define your outputs here.
+# outputs:
+#   time:
+#     description: Your output description here
 
 runs:
-  using: "composite"
+  using: 'composite'
   steps:
-    - name: "Check out repository"
-      uses: "actions/checkout@v3"
+    - name: Check out repository
+      uses: actions/checkout@v4
 
-    - name: "Run WoW Addon TOC Versioner"
-      run: "${{ github.action_path }}/addonVersioner.sh ${{ inputs.wikiURL }} ${{ github.workspace }}"
-      shell: bash
-
-    - name: "Create Pull Request"
-      uses: "peter-evans/create-pull-request@v4"
+    - name: Set up Node.js
+      uses: actions/setup-node@v6
       with:
-        commit-message: "Update TOC versions"
-        title: "Update TOC interface versions"
-        body: "WoW Addon TOC Versioner - This PR updates the interface numbers in the .toc files"
-        branch: "auto/update-addon-versions"
-        labels: "auto-generated, addon-version-update"
+        node-version: '24'
+
+    - name: Run WoW Addon TOC Versioner
+      id: versioner
+      run: node ${{ github.action_path }}/dist/index.js"
+      shell: bash
+      outputs:
+        tocs-updated: ${{ steps.run-wow-addon-toc-versioner.outputs.tocs-updated }}
+        tocs-markdown-table: ${{ steps.run-wow-addon-toc-versioner.outputs.tocs-markdown-table }}
+
+    - name: 'Create Pull Request'
+      uses: 'peter-evans/create-pull-request@v4'
+      with:
+        commit-message: 'Update toc interface versions to latest'
+        title: 'Update TOC interface versions'
+        body: ${{ steps.versioner.outputs.tocs-pr }}
+        branch: '${{ inputs.pr-branch-name }}'
+        labels: 'auto-generated, addon-version-update'
+      if: ${{ inputs.create-pr == 'true' && steps.versioner.outputs.tocs-updated != '0' }}
+
+    - name: 'Create Issue'
+      uses: JasonEtco/create-an-issue@v2
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      with:
+        filename: issue-template.md
+      if: ${{ inputs.create-issue-if-updates-found == 'true' && steps.versioner.outputs.tocs-updated != '0' }}
