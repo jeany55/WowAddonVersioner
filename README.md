@@ -1,62 +1,23 @@
-# 🎮 WoW Addon TOC Versioner
+# <img src="./img/wowicon.svg" alt="World of Warcraft Icon" width="24"/>  WoW Addon TOC Versioner
 
-<div align="center">
+**Automatically keep your World of Warcraft addons up to date!**
 
-```
-          █████   ███   █████          █████   ███   █████              
-         ░░███   ░███  ░░███          ░░███   ░███  ░░███               
-          ░███   ░███   ░███   ██████  ░███   ░███   ░███               
-          ░███   ░███   ░███  ███░░███ ░███   ░███   ░███               
-          ░░███  █████  ███  ░███ ░███ ░░███  █████  ███                
-           ░░░█████░█████░   ░███ ░███  ░░░█████░█████░                 
-             ░░███ ░░███     ░░██████     ░░███ ░░███                   
-              ░░░   ░░░       ░░░░░░       ░░░   ░░░                    
-
-             ███████████    ███████      █████████                      
-            ░█░░░███░░░█  ███░░░░░███   ███░░░░░███                     
-            ░   ░███  ░  ███     ░░███ ███     ░░░                      
-                ░███    ░███      ░███░███                              
-                ░███    ░███      ░███░███                              
-                ░███    ░░███     ███ ░░███     ███                     
-                █████    ░░░███████░   ░░█████████                      
-               ░░░░░       ░░░░░░░      ░░░░░░░░░                       
-
- █████  █████               █████            █████                      
-░░███  ░░███               ░░███            ░░███                       
- ░███   ░███  ████████   ███████   ██████   ███████    ██████  ████████ 
- ░███   ░███ ░░███░░███ ███░░███  ░░░░░███ ░░░███░    ███░░███░░███░░███
- ░███   ░███  ░███ ░███░███ ░███   ███████   ░███    ░███████  ░███ ░░░ 
- ░███   ░███  ░███ ░███░███ ░███  ███░░███   ░███ ███░███░░░   ░███     
- ░░████████   ░███████ ░░████████░░████████  ░░█████ ░░██████  █████    
-  ░░░░░░░░    ░███░░░   ░░░░░░░░  ░░░░░░░░    ░░░░░   ░░░░░░  ░░░░░     
-              ░███                                                      
-              █████                                                     
-             ░░░░░                                                      
-```
-
-**Automatically keep your World of Warcraft addon's TOC files up to date!**
+Intended for World of Warcraft Addon developers, this GitHub action will automatically check to see if the interface numbers in your .toc files are behind the latest. If they are, then the action will by default create a PR to update them for you, but can be configured to either open a PR, create an issue, or fail a job.
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![GitHub release](https://img.shields.io/github/v/release/jeany55/WowAddonVersioner)](https://github.com/jeany55/WowAddonVersioner/releases)
 
-</div>
+## Features
+* **Automatic Detection** - Scans your addon's `.toc` files and detects outdated interface versions
+* **Multi-TOC Support** - Handles multiple TOC files for different game versions (Retail, Classic, etc.)
+* **Auto Pull Requests** - Automatically creates PRs with the updated interface numbers
+* **Issue Creation** - Optionally create issues to track when updates are needed
+* **Updates Existing Issues/PRs** - If new interface numbers are available and an issue/PR is still open, then the existing one will be updated
 
----
-
-## ✨ Features
-
-- 🔄 **Automatic Detection** - Scans your addon's `.toc` files and detects outdated interface versions
-- 📊 **Multi-TOC Support** - Handles multiple TOC files for different game versions (Retail, Classic, etc.)
-- 🤖 **Auto Pull Requests** - Automatically creates PRs with the updated interface numbers
-- 📋 **Issue Creation** - Optionally create issues to track when updates are needed
-- 🎯 **Flexible Configuration** - Customize behavior with multiple input options
-- 🌐 **Up-to-date Sources** - Fetches the latest interface numbers from the official WoW Wiki
-
-## 🎮 Supported Game Types
-
+## Supported Game Types
 | Game Type | Prefix | Description |
 |-----------|--------|-------------|
-| Mainline | `11xxxx`, `12xxxx` | Retail/Current expansion |
+| Mainline | `11xxxx`, `12xxxx` | Retail |
 | Classic | `6xxxx` | Classic Era |
 | Vanilla | `1xxxx` | Vanilla Classic |
 | TBC | `2xxxx` | The Burning Crusade |
@@ -64,17 +25,16 @@
 | Cata | `4xxxx` | Cataclysm |
 | Mists | `5xxxx` | Mists of Pandaria |
 
-## 🚀 Quick Start
-
-Add this workflow to your repository at `.github/workflows/toc-versioner.yml`:
+## Quick Start
+This example assumes your .toc files are at the root. Add this workflow to your repository at `.github/workflows/toc-versioner.yml`:
 
 ```yaml
 name: Check TOC Versions
 
 on:
   schedule:
-    # Run weekly on Mondays at 9am UTC
-    - cron: '0 9 * * 1'
+    # Run daily at 7 PM
+    - cron: '0 19 * * *'
   workflow_dispatch: # Allow manual triggers
 
 jobs:
@@ -88,7 +48,7 @@ jobs:
         uses: jeany55/WowAddonVersioner@v1
 ```
 
-That's it! The action will automatically check your TOC files and create a PR if updates are available.
+That's it! This example action will run daily at 7 PM and also allow for manual triggering. The action will automatically check your TOC files and create a PR if updates are available.
 
 ## 📖 Usage Examples
 
@@ -122,7 +82,7 @@ If your TOC files are not in the repository root:
 
 ### Fail Build on Outdated Versions
 
-Useful for CI/CD pipelines where you want to enforce up-to-date TOC files:
+Useful for CI/CD pipelines where you want to enforce up-to-date TOC files (or get an email if a pipeline fails):
 
 ```yaml
 - name: Check TOC Versions
@@ -147,7 +107,7 @@ Useful for CI/CD pipelines where you want to enforce up-to-date TOC files:
     github-token: ${{ secrets.GITHUB_TOKEN }}
 ```
 
-## ⚙️ Inputs
+## Inputs
 
 | Input | Description | Required | Default |
 |-------|-------------|----------|---------|
@@ -159,15 +119,7 @@ Useful for CI/CD pipelines where you want to enforce up-to-date TOC files:
 | `create-issue-if-updates-found` | Create an issue if updates are found | No | `false` |
 | `github-token` | GitHub token for creating PRs/issues | No | `${{ secrets.GITHUB_TOKEN }}` |
 
-## 📤 Outputs
-
-The action sets the following outputs that can be used in subsequent steps:
-
-| Output | Description |
-|--------|-------------|
-| `tocs-updated` | Number of TOC files that need interface version updates (0 if all are current) |
-
-## 📁 TOC File Format
+## TOC File Format
 
 The action looks for the standard WoW TOC interface directive:
 
@@ -182,7 +134,7 @@ MyAddon.lua
 
 The action will automatically detect the game type based on the interface number prefix and update it to the latest version for that game type.
 
-## 🔐 Permissions
+## Permissions
 
 Make sure your workflow has the necessary permissions:
 
@@ -193,23 +145,17 @@ permissions:
   issues: write        # Required if using create-issue-if-updates-found
 ```
 
-## 🤝 Contributing
+Or make sure that actions are allowed to create pull requests for your repository.
+
+## Contributing
 
 Contributions are welcome! Please feel free to submit a Pull Request.
 
-## 📄 License
+## License
 
 This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
 
-## 💜 Acknowledgments
+## Acknowledgments
 
 - Special thanks to **Quetz the Great** for their contributions
 - Interface data sourced from [Warcraft Wiki](https://warcraft.wiki.gg)
-
----
-
-<div align="center">
-
-Made with ❤️ for the WoW addon community
-
-</div>
