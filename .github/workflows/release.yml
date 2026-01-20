@@ -19,7 +19,7 @@ on:
         description: Change notes to attach to release
         default: ''
       createRelease:
-        description: 'Whether to create a GitHub Release for this version. (true/false)'
+        description: 'Create GitHub Release'
         default: true
         type: boolean
 
