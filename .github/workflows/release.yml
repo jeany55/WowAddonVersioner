@@ -1,1 +1,76 @@
+name: 🚀 Release
+run-name: 🚀 Release new ${{ inputs.versionType }} version
+on:
+  # Run manually only
+  workflow_dispatch:
+    branches:
+      - main
+    inputs:
+      versionType:
+        description: 'Type of change'
+        required: true
+        default: 'patch'
+        type: choice
+        options:
+          - patch
+          - minor
+          - major
+      changeNotes:
+        description: Change notes to attach to release
+        default: ''
+      createRelease:
+        description: 'Whether to create a GitHub Release for this version. (true/false)'
+        default: true
+        type: boolean
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      # Checks-out repository
+      - uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.ACCESS_TOKEN_GIT }}
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: "24"
+
+      - name: Update version
+        run: |
+          if [[ $VERSION_TYPE == "patch" ]]; then
+            npm --no-git-tag-version version patch -m "Update version to %s"
+          elif [[ $VERSION_TYPE == "minor" ]]; then
+            npm --no-git-tag-version version minor -m "Update version to %s"
+          elif [[ $VERSION_TYPE == "major" ]]; then
+            npm --no-git-tag-version version major -m "Update version to %s"  
+          fi
+
+      - name: Build
+        shell: bash
+        run: npm run bundle
+
+      - name: Commit and tag release
+        run: |
+          VER="v$(node -p "require('./package.json').version")"
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add dist
+          git add src
+          git commit -m "Release version $VER"
+          git push
+          git tag -a "$VER" -m "Release version $VER"
+          git push origin tag "$VER"
+          echo "VERSION=$VER" >> $GITHUB_ENV
+        env:
+          VERSION_TYPE: ${{ github.event.inputs.versionType }}
+
+      - name: Create Release
+        if: ${{ inputs.createRelease == 'true' }}
+        uses: ncipollo/release-action@v1.12.0
+        with:
+          tag: ${{ env.VERSION }}
+          body: ${{ github.event.inputs.changeNotes }}
+          token: ${{ secrets.ACCESS_TOKEN_GIT }}
 
