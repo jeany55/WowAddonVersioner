@@ -18,6 +18,10 @@ on:
       changeNotes:
         description: Change notes to attach to release
         default: ''
+      repointMajorVersionTag:
+        description: 'Repoint the "major" version tag to this release'
+        default: true
+        type: boolean
       createRelease:
         description: 'Create GitHub Release'
         default: true
@@ -56,6 +60,7 @@ jobs:
       - name: Commit and tag release
         run: |
           VER="v$(node -p "require('./package.json').version")"
+          MAJOR_VER="${VER%%.*}"
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git add dist
@@ -67,8 +72,15 @@ jobs:
           git tag -a "$VER" -m "Release version $VER"
           git push origin tag "$VER"
           echo "VERSION=$VER" >> $GITHUB_ENV
+          echo "MAJOR_VERSION=$MAJOR_VER" >> $GITHUB_ENV
         env:
           VERSION_TYPE: ${{ github.event.inputs.versionType }}
+
+      - name: Repoint Major Version Tag
+        if: ${{ inputs.repointMajorVersionTag }}
+        run: |
+          git tag -f ${{ env.MAJOR_VERSION }} HEAD
+          git push -f origin ${{ env.MAJOR_VERSION }}
 
       - name: Create Release
         if: ${{ inputs.createRelease }}
