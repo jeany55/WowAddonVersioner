@@ -27572,6 +27572,120 @@ function requireCore () {
 
 var coreExports = requireCore();
 
+/**
+ * Represents a GitHub Action workflow file that may contain WoW game version strings.
+ * @class
+ * @param {string} fileName The name of the workflow file.
+ * @param {string} location The directory path of the workflow file.
+ */
+var ActionFile = /** @class */ (function () {
+    function ActionFile(fileName, location, workspaceDir) {
+        this.versionUpdates = [];
+        this.fileName = fileName;
+        this.filePath = path.join(location, fileName);
+        this.relativePath = path.relative(workspaceDir, this.filePath);
+        this.fileContents = fs.readFileSync(this.filePath, 'utf-8');
+        this.originalContents = this.fileContents;
+    }
+    /**
+     * Find game version strings in the file and update any outdated versions.
+     *
+     * The versionPattern regex defines what a "region containing game versions" looks like.
+     * Within each match of that pattern, individual version strings (X.Y.Z) are extracted,
+     * looked up against the wiki, and replaced if outdated.
+     *
+     * @param latestVersions Map of GameType to latest version string from the wiki.
+     * @param versionPattern Regex string that matches the region containing game versions.
+     *                       Individual X.Y.Z versions are extracted from within each match.
+     */
+    ActionFile.prototype.checkAndUpdateVersions = function (latestVersions, versionPattern) {
+        var _this = this;
+        var pattern = new RegExp(versionPattern, 'gm');
+        for (var _i = 0, _a = this.fileContents.matchAll(pattern); _i < _a.length; _i++) {
+            var regionMatch = _a[_i];
+            var originalRegion = regionMatch[0];
+            // Extract all individual version strings from within the matched region
+            var versionMatches = __spreadArray([], originalRegion.matchAll(/\d+\.\d+\.\d+/g), true);
+            if (versionMatches.length === 0)
+                continue;
+            var updatedRegion = versionMatches.reduce(function (region, versionMatch) {
+                var version = versionMatch[0];
+                var gameType = _this.findGameTypeForVersion(version, latestVersions);
+                if (!gameType)
+                    return region;
+                var latestVersion = latestVersions.get(gameType);
+                if (!latestVersion || !ActionFile.isVersionNewer(latestVersion, version))
+                    return region;
+                _this.versionUpdates.push({
+                    gameType: gameType,
+                    oldVersion: version,
+                    newVersion: latestVersion
+                });
+                return region.replace(version, latestVersion);
+            }, originalRegion);
+            if (updatedRegion !== originalRegion) {
+                this.fileContents = this.fileContents.replace(originalRegion, updatedRegion);
+            }
+        }
+    };
+    /**
+     * Determine which GameType a version string belongs to by matching against
+     * the latest known versions from the wiki. Uses major.minor matching first,
+     * then falls back to major version matching if unambiguous.
+     */
+    ActionFile.prototype.findGameTypeForVersion = function (version, latestVersions) {
+        var majorMinor = version.split('.').slice(0, 2).join('.');
+        var majorVersion = version.split('.')[0];
+        // First try exact major.minor match
+        for (var _i = 0, latestVersions_1 = latestVersions; _i < latestVersions_1.length; _i++) {
+            var _a = latestVersions_1[_i], gameType = _a[0], latestVersion = _a[1];
+            var latestMajorMinor = latestVersion.split('.').slice(0, 2).join('.');
+            if (latestMajorMinor === majorMinor)
+                return gameType;
+        }
+        // Fallback to major version match (only if unambiguous)
+        var majorMatches = [];
+        for (var _b = 0, latestVersions_2 = latestVersions; _b < latestVersions_2.length; _b++) {
+            var _c = latestVersions_2[_b], gameType = _c[0], latestVersion = _c[1];
+            if (latestVersion.split('.')[0] === majorVersion)
+                majorMatches.push(gameType);
+        }
+        if (majorMatches.length === 1)
+            return majorMatches[0];
+        return null;
+    };
+    /**
+     * Compare two version strings (e.g. "12.0.1" vs "12.0.2").
+     * Returns true if newVersion is strictly newer than oldVersion.
+     */
+    ActionFile.isVersionNewer = function (newVersion, oldVersion) {
+        var newParts = newVersion.split('.').map(Number);
+        var oldParts = oldVersion.split('.').map(Number);
+        for (var i = 0; i < Math.max(newParts.length, oldParts.length); i++) {
+            var n = newParts[i] || 0;
+            var o = oldParts[i] || 0;
+            if (n > o)
+                return true;
+            if (n < o)
+                return false;
+        }
+        return false;
+    };
+    Object.defineProperty(ActionFile.prototype, "hasUpdates", {
+        get: function () {
+            return this.versionUpdates.length > 0;
+        },
+        enumerable: false,
+        configurable: true
+    });
+    ActionFile.prototype.saveUpdatedVersions = function () {
+        if (this.hasUpdates) {
+            fs.writeFileSync(this.filePath, this.fileContents, 'utf-8');
+        }
+    };
+    return ActionFile;
+}());
+
 var GameType;
 (function (GameType) {
     GameType["Mainline"] = "Mainline";
@@ -29962,6 +30076,53 @@ function getInterfaceFromHtml(html, gameType) {
     var match = regex.exec(html);
     return match ? match[1] : null;
 }
+/**
+ * Extract the game version string (e.g. "12.0.1") for a specific game type from the wiki HTML.
+ * The table format is: Game type | Expansion | Version | Number | Date | Interface
+ * Targets the Version column (3rd column) after matching the game type.
+ * @param html The HTML content to search.
+ * @param gameType The game type to find the version for.
+ * @returns The version string, or null if not found.
+ */
+function getVersionFromHtml(html, gameType) {
+    // Match: <td>GameType</td> then skip one <td>...</td> (Expansion), then capture version from the next <td>
+    var regex = new RegExp("<td>\\s*".concat(gameType, "\\s*</td>") +
+        "\\s*<td[^>]*>[\\s\\S]*?</td>" + // Skip Expansion column
+        "\\s*<td[^>]*>\\s*([\\d.]+)", // Capture Version
+    's');
+    var match = regex.exec(html);
+    return match ? match[1].trim() : null;
+}
+/**
+ * Extract all game version strings from the wiki HTML, returning a map of GameType to version.
+ * @param html The HTML content to search.
+ * @returns A map of GameType to latest version string.
+ */
+function getAllVersionsFromHtml(html) {
+    var versions = new Map();
+    for (var _i = 0, _a = Object.values(GameType); _i < _a.length; _i++) {
+        var gameType = _a[_i];
+        var version = getVersionFromHtml(html, gameType);
+        if (version) {
+            versions.set(gameType, version);
+        }
+    }
+    return versions;
+}
+/**
+ * Reads all GitHub Action workflow files (.yml/.yaml) from the .github/workflows directory.
+ * @param workspaceDir The repository root directory.
+ * @returns An array of ActionFile objects.
+ */
+function readActionFilesFromDirectory(workspaceDir) {
+    var workflowsDir = path.join(workspaceDir, '.github', 'workflows');
+    if (!fs.existsSync(workflowsDir))
+        return [];
+    var files = fs.readdirSync(workflowsDir);
+    return files
+        .filter(function (f) { return f.endsWith('.yml') || f.endsWith('.yaml'); })
+        .map(function (f) { return new ActionFile(f, workflowsDir, workspaceDir); });
+}
 
 /**
  * Mapping of interface number prefixes to game types.
@@ -29979,16 +30140,43 @@ var GameTypePrefixesMap = {
 var LOGO = "\n          \u2588\u2588\u2588\u2588\u2588   \u2588\u2588\u2588   \u2588\u2588\u2588\u2588\u2588          \u2588\u2588\u2588\u2588\u2588   \u2588\u2588\u2588   \u2588\u2588\u2588\u2588\u2588              \n         \u2591\u2591\u2588\u2588\u2588   \u2591\u2588\u2588\u2588  \u2591\u2591\u2588\u2588\u2588          \u2591\u2591\u2588\u2588\u2588   \u2591\u2588\u2588\u2588  \u2591\u2591\u2588\u2588\u2588               \n          \u2591\u2588\u2588\u2588   \u2591\u2588\u2588\u2588   \u2591\u2588\u2588\u2588   \u2588\u2588\u2588\u2588\u2588\u2588  \u2591\u2588\u2588\u2588   \u2591\u2588\u2588\u2588   \u2591\u2588\u2588\u2588               \n          \u2591\u2588\u2588\u2588   \u2591\u2588\u2588\u2588   \u2591\u2588\u2588\u2588  \u2588\u2588\u2588\u2591\u2591\u2588\u2588\u2588 \u2591\u2588\u2588\u2588   \u2591\u2588\u2588\u2588   \u2591\u2588\u2588\u2588               \n          \u2591\u2591\u2588\u2588\u2588  \u2588\u2588\u2588\u2588\u2588  \u2588\u2588\u2588  \u2591\u2588\u2588\u2588 \u2591\u2588\u2588\u2588 \u2591\u2591\u2588\u2588\u2588  \u2588\u2588\u2588\u2588\u2588  \u2588\u2588\u2588                \n           \u2591\u2591\u2591\u2588\u2588\u2588\u2588\u2588\u2591\u2588\u2588\u2588\u2588\u2588\u2591   \u2591\u2588\u2588\u2588 \u2591\u2588\u2588\u2588  \u2591\u2591\u2591\u2588\u2588\u2588\u2588\u2588\u2591\u2588\u2588\u2588\u2588\u2588\u2591                 \n             \u2591\u2591\u2588\u2588\u2588 \u2591\u2591\u2588\u2588\u2588     \u2591\u2591\u2588\u2588\u2588\u2588\u2588\u2588     \u2591\u2591\u2588\u2588\u2588 \u2591\u2591\u2588\u2588\u2588                   \n              \u2591\u2591\u2591   \u2591\u2591\u2591       \u2591\u2591\u2591\u2591\u2591\u2591       \u2591\u2591\u2591   \u2591\u2591\u2591                    \n                                                                        \n                                                                        \n                                                                        \n             \u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588    \u2588\u2588\u2588\u2588\u2588\u2588\u2588      \u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588                      \n            \u2591\u2588\u2591\u2591\u2591\u2588\u2588\u2588\u2591\u2591\u2591\u2588  \u2588\u2588\u2588\u2591\u2591\u2591\u2591\u2591\u2588\u2588\u2588   \u2588\u2588\u2588\u2591\u2591\u2591\u2591\u2591\u2588\u2588\u2588                     \n            \u2591   \u2591\u2588\u2588\u2588  \u2591  \u2588\u2588\u2588     \u2591\u2591\u2588\u2588\u2588 \u2588\u2588\u2588     \u2591\u2591\u2591                      \n                \u2591\u2588\u2588\u2588    \u2591\u2588\u2588\u2588      \u2591\u2588\u2588\u2588\u2591\u2588\u2588\u2588                              \n                \u2591\u2588\u2588\u2588    \u2591\u2588\u2588\u2588      \u2591\u2588\u2588\u2588\u2591\u2588\u2588\u2588                              \n                \u2591\u2588\u2588\u2588    \u2591\u2591\u2588\u2588\u2588     \u2588\u2588\u2588 \u2591\u2591\u2588\u2588\u2588     \u2588\u2588\u2588                     \n                \u2588\u2588\u2588\u2588\u2588    \u2591\u2591\u2591\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2591   \u2591\u2591\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588                      \n               \u2591\u2591\u2591\u2591\u2591       \u2591\u2591\u2591\u2591\u2591\u2591\u2591      \u2591\u2591\u2591\u2591\u2591\u2591\u2591\u2591\u2591                       \n                                                                        \n                                                                        \n                                                                        \n \u2588\u2588\u2588\u2588\u2588  \u2588\u2588\u2588\u2588\u2588               \u2588\u2588\u2588\u2588\u2588            \u2588\u2588\u2588\u2588\u2588                      \n\u2591\u2591\u2588\u2588\u2588  \u2591\u2591\u2588\u2588\u2588               \u2591\u2591\u2588\u2588\u2588            \u2591\u2591\u2588\u2588\u2588                       \n \u2591\u2588\u2588\u2588   \u2591\u2588\u2588\u2588  \u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588   \u2588\u2588\u2588\u2588\u2588\u2588\u2588   \u2588\u2588\u2588\u2588\u2588\u2588   \u2588\u2588\u2588\u2588\u2588\u2588\u2588    \u2588\u2588\u2588\u2588\u2588\u2588  \u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588 \n \u2591\u2588\u2588\u2588   \u2591\u2588\u2588\u2588 \u2591\u2591\u2588\u2588\u2588\u2591\u2591\u2588\u2588\u2588 \u2588\u2588\u2588\u2591\u2591\u2588\u2588\u2588  \u2591\u2591\u2591\u2591\u2591\u2588\u2588\u2588 \u2591\u2591\u2591\u2588\u2588\u2588\u2591    \u2588\u2588\u2588\u2591\u2591\u2588\u2588\u2588\u2591\u2591\u2588\u2588\u2588\u2591\u2591\u2588\u2588\u2588\n \u2591\u2588\u2588\u2588   \u2591\u2588\u2588\u2588  \u2591\u2588\u2588\u2588 \u2591\u2588\u2588\u2588\u2591\u2588\u2588\u2588 \u2591\u2588\u2588\u2588   \u2588\u2588\u2588\u2588\u2588\u2588\u2588   \u2591\u2588\u2588\u2588    \u2591\u2588\u2588\u2588\u2588\u2588\u2588\u2588  \u2591\u2588\u2588\u2588 \u2591\u2591\u2591 \n \u2591\u2588\u2588\u2588   \u2591\u2588\u2588\u2588  \u2591\u2588\u2588\u2588 \u2591\u2588\u2588\u2588\u2591\u2588\u2588\u2588 \u2591\u2588\u2588\u2588  \u2588\u2588\u2588\u2591\u2591\u2588\u2588\u2588   \u2591\u2588\u2588\u2588 \u2588\u2588\u2588\u2591\u2588\u2588\u2588\u2591\u2591\u2591   \u2591\u2588\u2588\u2588     \n \u2591\u2591\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588   \u2591\u2588\u2588\u2588\u2588\u2588\u2588\u2588 \u2591\u2591\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2591\u2591\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588  \u2591\u2591\u2588\u2588\u2588\u2588\u2588 \u2591\u2591\u2588\u2588\u2588\u2588\u2588\u2588  \u2588\u2588\u2588\u2588\u2588    \n  \u2591\u2591\u2591\u2591\u2591\u2591\u2591\u2591    \u2591\u2588\u2588\u2588\u2591\u2591\u2591   \u2591\u2591\u2591\u2591\u2591\u2591\u2591\u2591  \u2591\u2591\u2591\u2591\u2591\u2591\u2591\u2591    \u2591\u2591\u2591\u2591\u2591   \u2591\u2591\u2591\u2591\u2591\u2591  \u2591\u2591\u2591\u2591\u2591     \n              \u2591\u2588\u2588\u2588                                                      \n              \u2588\u2588\u2588\u2588\u2588                                                     \n             \u2591\u2591\u2591\u2591\u2591                                                                                       \n";
 var tocDirectory = process.env.toc_directory || '';
 var githubWorkspace = process.env.GITHUB_WORKSPACE || '';
-var prTemplate = function (table) { return "World of Warcraft has updated its interface numbers and your addon TOC files are out of date.\n\nThis PR contains changes to the following TOC files, updating their interface numbers to the latest versions:\n\n".concat(table, "\n\nIf new interface versions are released before this PR is merged, this PR will automatically update to reflect those changes.\n\n---\n\n_This PR was created automatically by [WoW Addon Versioner](https://github.com/Jeany55/WowAddonVersioner)._\n"); };
-var issueTemplate = function (table) { return "---\ntitle: Addon TOC Files Out of Date\nlabels: addon-version-update, auto-generated\n---\nWorld of Warcraft has updated its interface numbers and your addon TOC files are out of date.\n\nThe following TOC files need to be updated:\n\n".concat(table, "\n\n---\n\n_This issue was created automatically by [WoW Addon Versioner](https://github.com/Jeany55/WowAddonVersioner)._\n"); };
+var prTemplate = function (tocTable, actionTable) {
+    var sections = [
+        'World of Warcraft has updated its versions and your addon files are out of date.\n'
+    ];
+    if (tocTable) {
+        sections.push('This PR contains changes to the following TOC files, updating their interface numbers to the latest versions:\n', tocTable + '\n');
+    }
+    if (actionTable) {
+        sections.push('The following GitHub Action workflow files have also been updated with the latest game versions:\n', actionTable + '\n');
+    }
+    sections.push('If new versions are released before this PR is merged, this PR will automatically update to reflect those changes.\n', '---\n', '_This PR was created automatically by [WoW Addon Versioner](https://github.com/Jeany55/WowAddonVersioner)._\n');
+    return sections.join('\n');
+};
+var issueTemplate = function (tocTable, actionTable) {
+    var sections = [
+        '---\ntitle: Addon Files Out of Date\nlabels: addon-version-update, auto-generated\n---',
+        'World of Warcraft has updated its versions and your addon files are out of date.\n'
+    ];
+    if (tocTable) {
+        sections.push('The following TOC files need to be updated:\n', tocTable + '\n');
+    }
+    if (actionTable) {
+        sections.push('The following GitHub Action workflow files need their game versions updated:\n', actionTable + '\n');
+    }
+    sections.push('---\n', '_This issue was created automatically by [WoW Addon Versioner](https://github.com/Jeany55/WowAddonVersioner)._\n');
+    return sections.join('\n');
+};
 var Constants = {
     COLOR_LOGO: createColorLogo(LOGO),
-    GITHUB_WORKSPACE: process.env.GITHUB_WORKSPACE || '',
+    GITHUB_WORKSPACE: githubWorkspace,
     ACTION_DIRECTORY: process.env.GITHUB_ACTION_PATH || '',
     TOC_DIRECTORY: tocDirectory ? path.join(githubWorkspace, tocDirectory) : githubWorkspace,
     TOC_DIRECTORY_EXTRA: tocDirectory,
     VERSION: version,
     WIKI_URL: process.env.wiki_url || '',
+    UPDATE_ACTION_VERSIONS: process.env.update_action_versions === 'true',
+    ACTION_VERSION_REGEX: process.env.action_version_regex || '',
     AUTHOR: author,
     PR_TEMPLATE: prTemplate,
     ISSUE_TEMPLATE: issueTemplate
@@ -30487,11 +30675,11 @@ var chalk = new Chalk({ level: 3 });
  */
 function run() {
     return __awaiter(this, void 0, void 0, function () {
-        var tocFiles, wikiUrl, rawHTML_1, tocsNeededingUpdates_1, message, tocsOutput, markDownTable, error_1;
-        return __generator(this, function (_a) {
-            switch (_a.label) {
+        var tocFiles, wikiUrl, rawHTML_1, tocsNeededingUpdates_1, actionsNeedingUpdates, latestVersions, actionFiles, _i, actionFiles_1, actionFile, actionDisplayRows, _a, actionFiles_2, actionFile, _b, _c, update, totalUpdates, parts, message, tocMarkdownTable, actionMarkdownTable, error_1;
+        return __generator(this, function (_d) {
+            switch (_d.label) {
                 case 0:
-                    _a.trys.push([0, 2, , 3]);
+                    _d.trys.push([0, 2, , 3]);
                     coreExports.info(Constants.COLOR_LOGO +
                         convertDataToHorizontalTable([
                             [
@@ -30511,9 +30699,12 @@ function run() {
                     wikiUrl = Constants.WIKI_URL;
                     coreExports.info("Found ".concat(chalk.bold(tocFiles.length), " .toc file(s)!"));
                     coreExports.info("Fetching current interface numbers from ".concat(chalk.bold(wikiUrl), "..."));
-                    return [4 /*yield*/, fetchWebpage(wikiUrl)];
+                    return [4 /*yield*/, fetchWebpage(wikiUrl)
+                        // ── TOC file processing ──────────────────────────────────────────────
+                    ];
                 case 1:
-                    rawHTML_1 = _a.sent();
+                    rawHTML_1 = _d.sent();
+                    // ── TOC file processing ──────────────────────────────────────────────
                     coreExports.info('Comparing toc interface numbers with latest versions...');
                     tocFiles.forEach(function (tocFile) {
                         if (tocFile.gameType) {
@@ -30546,46 +30737,128 @@ function run() {
                         chalk.yellowBright('Current Interface Version'),
                         chalk.yellowBright('Newest Interface Version')
                     ]));
-                    if (tocsNeededingUpdates_1.length == 0) {
+                    actionsNeedingUpdates = [];
+                    if (Constants.UPDATE_ACTION_VERSIONS) {
+                        coreExports.info('\nScanning GitHub Action workflow files for outdated game versions...');
+                        latestVersions = getAllVersionsFromHtml(rawHTML_1);
+                        actionFiles = readActionFilesFromDirectory(Constants.GITHUB_WORKSPACE);
+                        if (actionFiles.length === 0) {
+                            coreExports.info('No GitHub Action workflow files found in .github/workflows/');
+                        }
+                        else {
+                            coreExports.info("Found ".concat(chalk.bold(actionFiles.length), " workflow file(s). Checking for game version strings..."));
+                            for (_i = 0, actionFiles_1 = actionFiles; _i < actionFiles_1.length; _i++) {
+                                actionFile = actionFiles_1[_i];
+                                actionFile.checkAndUpdateVersions(latestVersions, Constants.ACTION_VERSION_REGEX);
+                            }
+                            actionDisplayRows = [];
+                            for (_a = 0, actionFiles_2 = actionFiles; _a < actionFiles_2.length; _a++) {
+                                actionFile = actionFiles_2[_a];
+                                if (actionFile.hasUpdates) {
+                                    actionsNeedingUpdates.push(actionFile);
+                                    for (_b = 0, _c = actionFile.versionUpdates; _b < _c.length; _b++) {
+                                        update = _c[_b];
+                                        actionDisplayRows.push([
+                                            actionFile.relativePath,
+                                            update.gameType,
+                                            update.oldVersion,
+                                            chalk.greenBright(update.newVersion)
+                                        ]);
+                                    }
+                                }
+                            }
+                            if (actionDisplayRows.length > 0) {
+                                coreExports.info(convertDataToHorizontalTable(actionDisplayRows, [
+                                    chalk.yellowBright('Action File'),
+                                    chalk.yellowBright('Game Type'),
+                                    chalk.yellowBright('Current Version'),
+                                    chalk.yellowBright('Newest Version')
+                                ]));
+                            }
+                            else {
+                                coreExports.info(chalk.greenBright('All action workflow game versions are up to date!'));
+                            }
+                        }
+                    }
+                    totalUpdates = tocsNeededingUpdates_1.length + actionsNeedingUpdates.length;
+                    if (totalUpdates === 0) {
                         coreExports.setOutput('tocs-updated', 0);
-                        coreExports.info(chalk.greenBright("All toc files are up to date! No interface updates needed."));
+                        coreExports.setOutput('actions-updated', 0);
+                        coreExports.info(chalk.greenBright('Everything is up to date! No updates needed.'));
                         return [2 /*return*/];
                     }
-                    coreExports.info("Found ".concat(chalk.bold(tocsNeededingUpdates_1.length), " toc file(s) needing interface updates:"));
+                    if (tocsNeededingUpdates_1.length > 0) {
+                        coreExports.info("Found ".concat(chalk.bold(tocsNeededingUpdates_1.length), " toc file(s) needing interface updates."));
+                    }
+                    if (actionsNeedingUpdates.length > 0) {
+                        coreExports.info("Found ".concat(chalk.bold(actionsNeedingUpdates.length), " action file(s) needing game version updates."));
+                    }
                     if (process.env.fail_job_when_updates_found === 'true') {
                         coreExports.error('Failing job due to fail-job-when-updates-found being set to true.');
-                        message = "".concat(tocsNeededingUpdates_1.length, " toc file(s) need interface updates: ").concat(tocsNeededingUpdates_1.map(function (toc) { return toc.fileName; }).join(', '));
+                        parts = [];
+                        if (tocsNeededingUpdates_1.length > 0) {
+                            parts.push("".concat(tocsNeededingUpdates_1.length, " toc file(s) need interface updates: ").concat(tocsNeededingUpdates_1.map(function (toc) { return toc.fileName; }).join(', ')));
+                        }
+                        if (actionsNeedingUpdates.length > 0) {
+                            parts.push("".concat(actionsNeedingUpdates.length, " action file(s) need version updates: ").concat(actionsNeedingUpdates.map(function (a) { return a.relativePath; }).join(', ')));
+                        }
+                        message = parts.join('; ');
                         coreExports.error(message);
                         coreExports.setFailed(message);
                         return [2 /*return*/];
                     }
-                    tocsOutput = tocsNeededingUpdates_1.map(function (tocFile) { return ({
-                        name: tocFile.fileName,
-                        gameType: tocFile.gameType || 'Unknown',
-                        oldVersion: tocFile.interfaceNumber,
-                        newVersion: tocFile.newInterfaceNumber
-                    }); });
-                    markDownTable = convertDataToMarkdownTable(__spreadArray([
-                        ['TOC File', 'Game Type', 'Old Version', 'New Version']
-                    ], tocsOutput.map(function (toc) { return [toc.name, toc.gameType, toc.oldVersion, toc.newVersion]; }), true));
-                    coreExports.setOutput('tocs-updated', tocsOutput.length);
+                    tocMarkdownTable = tocsNeededingUpdates_1.length > 0
+                        ? convertDataToMarkdownTable(__spreadArray([
+                            ['TOC File', 'Game Type', 'Old Version', 'New Version']
+                        ], tocsNeededingUpdates_1.map(function (toc) { return [
+                            toc.fileName,
+                            toc.gameType || 'Unknown',
+                            toc.interfaceNumber,
+                            toc.newInterfaceNumber
+                        ]; }), true))
+                        : undefined;
+                    actionMarkdownTable = actionsNeedingUpdates.length > 0
+                        ? convertDataToMarkdownTable(__spreadArray([
+                            ['Action File', 'Game Type', 'Old Version', 'New Version']
+                        ], actionsNeedingUpdates.flatMap(function (actionFile) {
+                            return actionFile.versionUpdates.map(function (update) { return [
+                                actionFile.relativePath,
+                                update.gameType,
+                                update.oldVersion,
+                                update.newVersion
+                            ]; });
+                        }), true))
+                        : undefined;
+                    coreExports.setOutput('tocs-updated', tocsNeededingUpdates_1.length);
+                    coreExports.setOutput('actions-updated', actionsNeedingUpdates.length);
                     if (process.env.create_issue_if_updates_found === 'true') {
                         coreExports.info('Creating issue template file...');
-                        // Make a brand new file
-                        fs.writeFileSync(path.join(Constants.ACTION_DIRECTORY, 'issue-template.md'), Constants.ISSUE_TEMPLATE(markDownTable), 'utf8');
+                        fs.writeFileSync(path.join(Constants.ACTION_DIRECTORY, 'issue-template.md'), Constants.ISSUE_TEMPLATE(tocMarkdownTable, actionMarkdownTable), 'utf8');
                     }
-                    coreExports.setOutput('tocs-pr', Constants.PR_TEMPLATE(markDownTable));
-                    coreExports.setOutput('tocs-issue', Constants.ISSUE_TEMPLATE(markDownTable));
-                    coreExports.info(convertDataToHorizontalTable(tocsNeededingUpdates_1.map(function (tocFile) { return [
-                        tocFile.fileName,
-                        "".concat(tocFile.interfaceNumber, " -> ").concat(tocFile.newInterfaceNumber)
-                    ]; }), [chalk.yellowBright('TOC File'), chalk.yellowBright('Update')]));
-                    coreExports.info('Updating toc files...');
-                    tocsNeededingUpdates_1.map(function (tocFile) { return tocFile.saveUpdatedInterfaceNumber(); });
-                    coreExports.info(chalk.greenBright.bold('All toc files updated.'));
+                    coreExports.setOutput('tocs-pr', Constants.PR_TEMPLATE(tocMarkdownTable, actionMarkdownTable));
+                    coreExports.setOutput('tocs-issue', Constants.ISSUE_TEMPLATE(tocMarkdownTable, actionMarkdownTable));
+                    // ── Display summary and apply updates ────────────────────────────────
+                    if (tocsNeededingUpdates_1.length > 0) {
+                        coreExports.info(convertDataToHorizontalTable(tocsNeededingUpdates_1.map(function (tocFile) { return [
+                            tocFile.fileName,
+                            "".concat(tocFile.interfaceNumber, " -> ").concat(tocFile.newInterfaceNumber)
+                        ]; }), [chalk.yellowBright('TOC File'), chalk.yellowBright('Update')]));
+                    }
+                    if (actionsNeedingUpdates.length > 0) {
+                        coreExports.info(convertDataToHorizontalTable(actionsNeedingUpdates.flatMap(function (actionFile) {
+                            return actionFile.versionUpdates.map(function (update) { return [
+                                actionFile.relativePath,
+                                "".concat(update.oldVersion, " -> ").concat(update.newVersion)
+                            ]; });
+                        }), [chalk.yellowBright('Action File'), chalk.yellowBright('Update')]));
+                    }
+                    coreExports.info('Updating files...');
+                    tocsNeededingUpdates_1.forEach(function (tocFile) { return tocFile.saveUpdatedInterfaceNumber(); });
+                    actionsNeedingUpdates.forEach(function (actionFile) { return actionFile.saveUpdatedVersions(); });
+                    coreExports.info(chalk.greenBright.bold('All files updated.'));
                     return [3 /*break*/, 3];
                 case 2:
-                    error_1 = _a.sent();
+                    error_1 = _d.sent();
                     // Fail the workflow run if an error occurs
                     if (error_1 instanceof Error)
                         coreExports.setFailed(error_1.message);
