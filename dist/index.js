@@ -30141,14 +30141,12 @@ var LOGO = "\n          \u2588\u2588\u2588\u2588\u2588   \u2588\u2588\u2588   \u
 var tocDirectory = process.env.toc_directory || '';
 var githubWorkspace = process.env.GITHUB_WORKSPACE || '';
 var prTemplate = function (tocTable, actionTable) {
-    var sections = [
-        'World of Warcraft has updated its versions and your addon files are out of date.\n'
-    ];
+    var sections = ['World of Warcraft has updated its versions and your addon files are out of date.\n'];
     if (tocTable) {
         sections.push('This PR contains changes to the following TOC files, updating their interface numbers to the latest versions:\n', tocTable + '\n');
     }
     if (actionTable) {
-        sections.push('The following GitHub Action workflow files have also been updated with the latest game versions:\n', actionTable + '\n');
+        sections.push('The following GitHub Action workflow files have been updated with the latest game versions:\n', actionTable + '\n');
     }
     sections.push('If new versions are released before this PR is merged, this PR will automatically update to reflect those changes.\n', '---\n', '_This PR was created automatically by [WoW Addon Versioner](https://github.com/Jeany55/WowAddonVersioner)._\n');
     return sections.join('\n');
