@@ -182,9 +182,7 @@ export async function run(): Promise<void> {
       core.info(`Found ${chalk.bold(tocsNeededingUpdates.length)} toc file(s) needing interface updates.`)
     }
     if (actionsNeedingUpdates.length > 0) {
-      core.info(
-        `Found ${chalk.bold(actionsNeedingUpdates.length)} action file(s) needing game version updates.`
-      )
+      core.info(`Found ${chalk.bold(actionsNeedingUpdates.length)} action file(s) needing game version updates.`)
     }
 
     if (process.env.fail_job_when_updates_found === 'true') {

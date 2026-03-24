@@ -60,9 +60,7 @@ const tocDirectory = process.env.toc_directory || ''
 const githubWorkspace = process.env.GITHUB_WORKSPACE || ''
 
 const prTemplate = (tocTable?: string, actionTable?: string) => {
-  const sections: string[] = [
-    'World of Warcraft has updated its versions and your addon files are out of date.\n'
-  ]
+  const sections: string[] = ['World of Warcraft has updated its versions and your addon files are out of date.\n']
 
   if (tocTable) {
     sections.push(
@@ -98,10 +96,7 @@ const issueTemplate = (tocTable?: string, actionTable?: string) => {
   }
 
   if (actionTable) {
-    sections.push(
-      'The following GitHub Action workflow files need their game versions updated:\n',
-      actionTable + '\n'
-    )
+    sections.push('The following GitHub Action workflow files need their game versions updated:\n', actionTable + '\n')
   }
 
   sections.push(

@@ -61,7 +61,7 @@ export class ActionFile {
       const updatedRegion = versionMatches.reduce((region, versionMatch) => {
         const version = versionMatch[0]
         const gameType = this.findGameTypeForVersion(version, latestVersions)
-        const latestVersion = gameType ? latestVersions.get(gameType) ?? null : null
+        const latestVersion = gameType ? (latestVersions.get(gameType) ?? null) : null
 
         this.foundVersions.push({
           gameType,
@@ -93,10 +93,7 @@ export class ActionFile {
    * the latest known versions from the wiki. Uses major.minor matching first,
    * then falls back to major version matching if unambiguous.
    */
-  private findGameTypeForVersion(
-    version: string,
-    latestVersions: Map<GameType, string>
-  ): GameType | null {
+  private findGameTypeForVersion(version: string, latestVersions: Map<GameType, string>): GameType | null {
     const majorMinor = version.split('.').slice(0, 2).join('.')
     const majorVersion = version.split('.')[0]
 
