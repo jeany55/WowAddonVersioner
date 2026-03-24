@@ -27581,6 +27581,7 @@ var coreExports = requireCore();
 var ActionFile = /** @class */ (function () {
     function ActionFile(fileName, location, workspaceDir) {
         this.versionUpdates = [];
+        this.foundVersions = [];
         this.fileName = fileName;
         this.filePath = path.join(location, fileName);
         this.relativePath = path.relative(workspaceDir, this.filePath);
@@ -27609,11 +27610,17 @@ var ActionFile = /** @class */ (function () {
             if (versionMatches.length === 0)
                 continue;
             var updatedRegion = versionMatches.reduce(function (region, versionMatch) {
+                var _a;
                 var version = versionMatch[0];
                 var gameType = _this.findGameTypeForVersion(version, latestVersions);
+                var latestVersion = gameType ? ((_a = latestVersions.get(gameType)) !== null && _a !== void 0 ? _a : null) : null;
+                _this.foundVersions.push({
+                    gameType: gameType,
+                    currentVersion: version,
+                    latestVersion: latestVersion
+                });
                 if (!gameType)
                     return region;
-                var latestVersion = latestVersions.get(gameType);
                 if (!latestVersion || !ActionFile.isVersionNewer(latestVersion, version))
                     return region;
                 _this.versionUpdates.push({
@@ -30085,8 +30092,9 @@ function getInterfaceFromHtml(html, gameType) {
  * @returns The version string, or null if not found.
  */
 function getVersionFromHtml(html, gameType) {
-    // Match: <td>GameType</td> then skip one <td>...</td> (Expansion), then capture version from the next <td>
+    // Match: <td>GameType</td> then skip two <td>...</td> (Icon + Expansion), then capture version from the next <td>
     var regex = new RegExp("<td>\\s*".concat(gameType, "\\s*</td>") +
+        "\\s*<td[^>]*>[\\s\\S]*?</td>" + // Skip Icon column
         "\\s*<td[^>]*>[\\s\\S]*?</td>" + // Skip Expansion column
         "\\s*<td[^>]*>\\s*([\\d.]+)", // Capture Version
     's');
@@ -30673,11 +30681,11 @@ var chalk = new Chalk({ level: 3 });
  */
 function run() {
     return __awaiter(this, void 0, void 0, function () {
-        var tocFiles, wikiUrl, rawHTML_1, tocsNeededingUpdates_1, actionsNeedingUpdates, latestVersions, actionFiles, _i, actionFiles_1, actionFile, actionDisplayRows, _a, actionFiles_2, actionFile, _b, _c, update, totalUpdates, parts, message, tocMarkdownTable, actionMarkdownTable, error_1;
-        return __generator(this, function (_d) {
-            switch (_d.label) {
+        var tocFiles, wikiUrl, rawHTML_1, tocsNeededingUpdates_1, actionsNeedingUpdates, latestVersions, actionFiles, _i, actionFiles_1, actionFile, _a, actionFiles_2, actionFile, actionOverviewRows, _b, actionFiles_3, actionFile, _c, _d, found, newestVersion, totalUpdates, parts, message, tocMarkdownTable, actionMarkdownTable, error_1;
+        return __generator(this, function (_e) {
+            switch (_e.label) {
                 case 0:
-                    _d.trys.push([0, 2, , 3]);
+                    _e.trys.push([0, 2, , 3]);
                     coreExports.info(Constants.COLOR_LOGO +
                         convertDataToHorizontalTable([
                             [
@@ -30701,7 +30709,7 @@ function run() {
                         // ── TOC file processing ──────────────────────────────────────────────
                     ];
                 case 1:
-                    rawHTML_1 = _d.sent();
+                    rawHTML_1 = _e.sent();
                     // ── TOC file processing ──────────────────────────────────────────────
                     coreExports.info('Comparing toc interface numbers with latest versions...');
                     tocFiles.forEach(function (tocFile) {
@@ -30749,24 +30757,41 @@ function run() {
                                 actionFile = actionFiles_1[_i];
                                 actionFile.checkAndUpdateVersions(latestVersions, Constants.ACTION_VERSION_REGEX);
                             }
-                            actionDisplayRows = [];
+                            // Collect action files needing updates
                             for (_a = 0, actionFiles_2 = actionFiles; _a < actionFiles_2.length; _a++) {
                                 actionFile = actionFiles_2[_a];
                                 if (actionFile.hasUpdates) {
                                     actionsNeedingUpdates.push(actionFile);
-                                    for (_b = 0, _c = actionFile.versionUpdates; _b < _c.length; _b++) {
-                                        update = _c[_b];
-                                        actionDisplayRows.push([
-                                            actionFile.relativePath,
-                                            update.gameType,
-                                            update.oldVersion,
-                                            chalk.greenBright(update.newVersion)
-                                        ]);
-                                    }
                                 }
                             }
-                            if (actionDisplayRows.length > 0) {
-                                coreExports.info(convertDataToHorizontalTable(actionDisplayRows, [
+                            actionOverviewRows = [];
+                            for (_b = 0, actionFiles_3 = actionFiles; _b < actionFiles_3.length; _b++) {
+                                actionFile = actionFiles_3[_b];
+                                for (_c = 0, _d = actionFile.foundVersions; _c < _d.length; _c++) {
+                                    found = _d[_c];
+                                    newestVersion = '';
+                                    if (!found.gameType) {
+                                        newestVersion = chalk.red('Unknown game type!');
+                                    }
+                                    else if (!found.latestVersion) {
+                                        newestVersion = chalk.red('Unknown latest!');
+                                    }
+                                    else if (ActionFile.isVersionNewer(found.latestVersion, found.currentVersion)) {
+                                        newestVersion = chalk.greenBright(found.latestVersion);
+                                    }
+                                    else {
+                                        newestVersion = found.currentVersion;
+                                    }
+                                    actionOverviewRows.push([
+                                        actionFile.relativePath,
+                                        found.gameType || 'Unknown',
+                                        found.currentVersion,
+                                        newestVersion
+                                    ]);
+                                }
+                            }
+                            if (actionOverviewRows.length > 0) {
+                                coreExports.info(convertDataToHorizontalTable(actionOverviewRows, [
                                     chalk.yellowBright('Action File'),
                                     chalk.yellowBright('Game Type'),
                                     chalk.yellowBright('Current Version'),
@@ -30774,7 +30799,7 @@ function run() {
                                 ]));
                             }
                             else {
-                                coreExports.info(chalk.greenBright('All action workflow game versions are up to date!'));
+                                coreExports.info('No game version strings found in workflow files.');
                             }
                         }
                     }
@@ -30856,7 +30881,7 @@ function run() {
                     coreExports.info(chalk.greenBright.bold('All files updated.'));
                     return [3 /*break*/, 3];
                 case 2:
-                    error_1 = _d.sent();
+                    error_1 = _e.sent();
                     // Fail the workflow run if an error occurs
                     if (error_1 instanceof Error)
                         coreExports.setFailed(error_1.message);
