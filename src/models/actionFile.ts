@@ -51,7 +51,7 @@ export class ActionFile {
   checkAndUpdateVersions(latestVersions: Map<GameType, string>, versionPattern: string): void {
     const pattern = new RegExp(versionPattern, 'gm')
 
-    for (const regionMatch of this.fileContents.matchAll(pattern)) {
+    for (const regionMatch of [...this.fileContents.matchAll(pattern)]) {
       const originalRegion = regionMatch[0]
 
       // Extract all individual version strings from within the matched region
@@ -101,14 +101,14 @@ export class ActionFile {
     const majorVersion = version.split('.')[0]
 
     // First try exact major.minor match
-    for (const [gameType, latestVersion] of latestVersions) {
+    for (const [gameType, latestVersion] of [...latestVersions]) {
       const latestMajorMinor = latestVersion.split('.').slice(0, 2).join('.')
       if (latestMajorMinor === majorMinor) return gameType
     }
 
     // Fallback to major version match (only if unambiguous)
     const majorMatches: GameType[] = []
-    for (const [gameType, latestVersion] of latestVersions) {
+    for (const [gameType, latestVersion] of [...latestVersions]) {
       if (latestVersion.split('.')[0] === majorVersion) majorMatches.push(gameType)
     }
     if (majorMatches.length === 1) return majorMatches[0]
