@@ -9,4 +9,4 @@ export enum GameType {
 }
 
 export { ActionFile } from './actionFile'
-export type { ActionVersionUpdate } from './actionFile'
+export type { ActionVersionUpdate, ActionVersionFound } from './actionFile'

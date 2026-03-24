@@ -212,9 +212,10 @@ export function createFileAndWriteContents(filePath: string, contents: string) {
  * @returns The version string, or null if not found.
  */
 export function getVersionFromHtml(html: string, gameType: GameType): string | null {
-  // Match: <td>GameType</td> then skip one <td>...</td> (Expansion), then capture version from the next <td>
+  // Match: <td>GameType</td> then skip two <td>...</td> (Icon + Expansion), then capture version from the next <td>
   const regex = new RegExp(
     `<td>\\s*${gameType}\\s*</td>` +
+      `\\s*<td[^>]*>[\\s\\S]*?</td>` + // Skip Icon column
       `\\s*<td[^>]*>[\\s\\S]*?</td>` + // Skip Expansion column
       `\\s*<td[^>]*>\\s*([\\d.]+)`, // Capture Version
     's'

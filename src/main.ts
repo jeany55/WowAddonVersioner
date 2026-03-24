@@ -121,25 +121,40 @@ export async function run(): Promise<void> {
           actionFile.checkAndUpdateVersions(latestVersions, Constants.ACTION_VERSION_REGEX)
         }
 
-        // Build display table for action files
-        const actionDisplayRows: string[][] = []
+        // Collect action files needing updates
         for (const actionFile of actionFiles) {
           if (actionFile.hasUpdates) {
             actionsNeedingUpdates.push(actionFile)
-            for (const update of actionFile.versionUpdates) {
-              actionDisplayRows.push([
-                actionFile.relativePath,
-                update.gameType,
-                update.oldVersion,
-                chalk.greenBright(update.newVersion)
-              ])
-            }
           }
         }
 
-        if (actionDisplayRows.length > 0) {
+        // Build overview table showing all found versions (like the TOC table)
+        const actionOverviewRows: string[][] = []
+        for (const actionFile of actionFiles) {
+          for (const found of actionFile.foundVersions) {
+            let newestVersion = ''
+            if (!found.gameType) {
+              newestVersion = chalk.red('Unknown game type!')
+            } else if (!found.latestVersion) {
+              newestVersion = chalk.red('Unknown latest!')
+            } else if (ActionFile.isVersionNewer(found.latestVersion, found.currentVersion)) {
+              newestVersion = chalk.greenBright(found.latestVersion)
+            } else {
+              newestVersion = found.currentVersion
+            }
+
+            actionOverviewRows.push([
+              actionFile.relativePath,
+              found.gameType || 'Unknown',
+              found.currentVersion,
+              newestVersion
+            ])
+          }
+        }
+
+        if (actionOverviewRows.length > 0) {
           core.info(
-            convertDataToHorizontalTable(actionDisplayRows, [
+            convertDataToHorizontalTable(actionOverviewRows, [
               chalk.yellowBright('Action File'),
               chalk.yellowBright('Game Type'),
               chalk.yellowBright('Current Version'),
@@ -147,7 +162,7 @@ export async function run(): Promise<void> {
             ])
           )
         } else {
-          core.info(chalk.greenBright('All action workflow game versions are up to date!'))
+          core.info('No game version strings found in workflow files.')
         }
       }
     }

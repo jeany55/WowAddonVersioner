@@ -8,6 +8,12 @@ export interface ActionVersionUpdate {
   newVersion: string
 }
 
+export interface ActionVersionFound {
+  gameType: GameType | null
+  currentVersion: string
+  latestVersion: string | null
+}
+
 /**
  * Represents a GitHub Action workflow file that may contain WoW game version strings.
  * @class
@@ -21,6 +27,7 @@ export class ActionFile {
   fileContents: string
   originalContents: string
   versionUpdates: ActionVersionUpdate[] = []
+  foundVersions: ActionVersionFound[] = []
 
   constructor(fileName: string, location: string, workspaceDir: string) {
     this.fileName = fileName
@@ -54,10 +61,16 @@ export class ActionFile {
       const updatedRegion = versionMatches.reduce((region, versionMatch) => {
         const version = versionMatch[0]
         const gameType = this.findGameTypeForVersion(version, latestVersions)
+        const latestVersion = gameType ? latestVersions.get(gameType) ?? null : null
+
+        this.foundVersions.push({
+          gameType,
+          currentVersion: version,
+          latestVersion
+        })
 
         if (!gameType) return region
 
-        const latestVersion = latestVersions.get(gameType)
         if (!latestVersion || !ActionFile.isVersionNewer(latestVersion, version)) return region
 
         this.versionUpdates.push({
