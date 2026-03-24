@@ -30013,10 +30013,11 @@ function getInterfaceFromHtml(html, gameType) {
  */
 function getVersionFromHtml(html, gameType) {
     // Match: <td>GameType</td> then skip two <td>...</td> (Icon + Expansion), then capture version from the next <td>
+    // The version may be wrapped in an <a> tag, so we skip any inner tags before capturing digits
     const regex = new RegExp(`<td>\\s*${gameType}\\s*</td>` +
         `\\s*<td[^>]*>[\\s\\S]*?</td>` + // Skip Icon column
         `\\s*<td[^>]*>[\\s\\S]*?</td>` + // Skip Expansion column
-        `\\s*<td[^>]*>\\s*([\\d.]+)`, // Capture Version
+        `\\s*<td[^>]*>[\\s\\S]*?(\\d[\\d.]+)`, // Capture Version (may be inside <a> tags)
     's');
     const match = regex.exec(html);
     return match ? match[1].trim() : null;
