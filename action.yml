@@ -52,7 +52,7 @@ inputs:
       Access Token (PAT) with "contents: write" and "workflows: write" permissions is required, since the default
       GITHUB_TOKEN cannot modify workflow files.'
     required: false
-    default: '${{ secrets.GITHUB_TOKEN }}'
+    default: '${{ github.token }}'
 
 # Define your outputs here.
 # outputs:
